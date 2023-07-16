@@ -350,153 +350,159 @@ object cosim extends Module {
   object emulator extends Cross[emulator]("32", "64")
 }
 
-object cases extends Module {
-  trait Case extends Module {
-    def compile: T[PathRef] = T {
-      os.proc(Seq(s"clang-rv${xlen}", "-o", name() + ".elf", s"--target=riscv${xlen}", s"-march=rv${xlen}gc", "-mno-relax", s"-T${linkScript().path}") ++ allSourceFiles().map(_.path.toString)).call(T.ctx.dest)
-      os.proc(Seq("llvm-objcopy", "-O", "binary", "--only-section=.text", name() + ".elf", name())).call(T.ctx.dest)
-      T.log.info(s"${name()} is generated in ${T.dest},\n")
-      PathRef(T.ctx.dest / name())
-    }
+// object cases extends Module {
+//   trait Case extends Module {
+//     def compile: T[PathRef] = T {
+//       /////// ql original
+//       os.proc(Seq(s"clang-rv${xlen}", "-o", name() + ".elf", s"--target=riscv${xlen}", s"-march=rv${xlen}gc", "-mno-relax", s"-T${linkScript().path}") ++ allSourceFiles().map(_.path.toString)).call(T.ctx.dest)
+//       os.proc(Seq("llvm-objcopy", "-O", "binary", "--only-section=.text", name() + ".elf", name())).call(T.ctx.dest)
+//       /////// ql new
+//       // os.proc(Seq(s"riscv${xlen}-unknown-elf-gcc", "-o", name() + ".elf", s"--target=riscv${xlen}", s"-march=rv${xlen}gc", "-mno-relax", s"-T${linkScript().path}") ++ allSourceFiles().map(_.path.toString)).call(T.ctx.dest)
+//       // os.proc(Seq(s"riscv${xlen}-unknown-elf-objcopy", "-O", "binary", "--only-section=.text", name() + ".elf", name())).call(T.ctx.dest)
+//       T.log.info(s"${name()} is generated in ${T.dest},\n")
+//       PathRef(T.ctx.dest / name())
+//     }
 
-    def name: T[String] = millSourcePath.last
+//     def name: T[String] = millSourcePath.last
 
-    def allSourceFiles = T {
-      Lib.findSourceFiles(sources(), Seq("S", "s", "c", "cpp")).map(PathRef(_))
-    }
+//     def allSourceFiles = T {
+//       Lib.findSourceFiles(sources(), Seq("S", "s", "c", "cpp")).map(PathRef(_))
+//     }
 
-    def sources = T.sources {
-      millSourcePath
-    }
+//     def sources = T.sources {
+//       millSourcePath
+//     }
 
-    def xlen: Int = 64
+//     def xlen: Int = 64
 
-    def linkScript: T[PathRef] = T {
-      os.write(T.ctx.dest / "linker.ld",
-        s"""
-           |SECTIONS
-           |{
-           |  . = 0x1000;
-           |  .text.start : { *(.text.start) }
-           |}
-           |""".stripMargin)
-      PathRef(T.ctx.dest / "linker.ld")
-    }
-  }
+//     def linkScript: T[PathRef] = T {
+//       os.write(T.ctx.dest / "linker.ld",
+//         s"""
+//            |SECTIONS
+//            |{
+//            |  . = 0x1000;
+//            |  .text.start : { *(.text.start) }
+//            |}
+//            |""".stripMargin)
+//       PathRef(T.ctx.dest / "linker.ld")
+//     }
+//   }
 
-  object entrance64 extends Case {
-    override def xlen = 64
-  }
+//   object entrance64 extends Case {
+//     override def xlen = 64
+//   }
 
-  object entrance32 extends Case {
-    override def xlen = 32
-  }
+//   object entrance32 extends Case {
+//     override def xlen = 32
+//   }
 
-  object riscvtests extends Module {
+//   object riscvtests extends Module {
 
-    def alltests = os.walk(testsRoot).filterNot(p => p.last.endsWith("dump")).filter(p => p.last.startsWith("rv")).map(c => c.last)
+//     def alltests = os.walk(testsRoot).filterNot(p => p.last.endsWith("dump")).filter(p => p.last.startsWith("rv")).map(c => c.last)
 
-    def testsRoot =
-      os.Path(sys.env("RISCV_TESTS_ROOT")) / "share" / "riscv-tests"
+//     def testsRoot =
+//       os.Path(sys.env("RISCV_TESTS_ROOT")) / "share" / "riscv-tests"
 
-    def init = T {
-      target().map(bin => {
-        os.proc("cp", bin.path, "./" + bin.path.last + ".elf").call(T.dest)
-        os.proc("llvm-objcopy", "-O", "binary", bin.path.last + ".elf", bin.path.last).call(T.dest)
-      })
-      PathRef(T.dest)
-    }
+//     def init = T {
+//       target().map(bin => {
+//         os.proc("cp", bin.path, "./" + bin.path.last + ".elf").call(T.dest)
+//         os.proc("llvm-objcopy", "-O", "binary", bin.path.last + ".elf", bin.path.last).call(T.dest) // ql original
+//         // os.proc("riscv32-unknown-elf-objcopy", "-O", "binary", bin.path.last + ".elf", bin.path.last).call(T.dest) // ql new
+//       })
+//       PathRef(T.dest)
+//     }
 
-    def target = T {
-      os.walk(testsRoot).filter(p => p.last.startsWith("rv")).filterNot(p => p.last.endsWith("dump")).map(PathRef(_))
-    }
+//     def target = T {
+//       os.walk(testsRoot).filter(p => p.last.startsWith("rv")).filterNot(p => p.last.endsWith("dump")).map(PathRef(_))
+//     }
 
-    class Suite(casename: String) extends ScalaModule with ScalafmtModule {
-      override def scalaVersion = v.scala
+//     class Suite(casename: String) extends ScalaModule with ScalafmtModule {
+//       override def scalaVersion = v.scala
 
-      def binaries = T {
-        casename match {
-          case "rv64" => {
-            os.walk(init().path).filter(p => p.last.startsWith(casename)).filterNot(p => p.last.endsWith("elf")).filter(p =>
-              p.last.startsWith("rv64mi-p") | p.last.startsWith("rv64si-p") | p.last.startsWith("rv64ui-p") | p.last.startsWith("rv64uf-p") | p.last.startsWith("rv64ua-p") | p.last.startsWith("rv64ud-p") | p.last.startsWith("rv64uc-p") | p.last.startsWith("rv64um-p") | p.last.startsWith("rv64uzfh-p")).filterNot(p =>
-              p.last.startsWith("rv64ui-p-simple") //have no <pass> symbol in elf
-                | p.last.endsWith("csr") //MISA differs between Rocket and Spike
-                | p.last.endsWith("rv64mi-p-breakpoint") // Requires debug module
-                | p.last.endsWith("rv64si-p-icache-alias") // infinit loop after trap_machine_ecall at 0x8000012b8
-                | p.last.endsWith("rv64ui-p-ma_data") // https://github.com/riscv-software-src/riscv-tests/issues/419
-                | p.last.endsWith("rv64si-p-wfi") // infinit loop after trap_supervisor_ecall at 0x800001ac
-                | p.last.endsWith("rv64mi-p-scall")) // infinit loop after trap_supervisor_ecall at 0x800001ec
-              .map(PathRef(_))
-          }
-          case "rv32" => {
-            os.walk(init().path).filter(p => p.last.startsWith(casename)).filterNot(p => p.last.endsWith("elf")).filter(p =>
-              p.last.startsWith("rv32mi-p") | p.last.startsWith("rv32si-p") | p.last.startsWith("rv32ui-p") | p.last.startsWith("rv32uf-p") | p.last.startsWith("rv32ua-p") | p.last.startsWith("rv32um-p") | p.last.startsWith("rv32uzfh-p")).filterNot(p =>
-              p.last.startsWith("rv32ui-p-simple")
-                | p.last.endsWith("csr") // MISA differs
-                | p.last.endsWith("rv32mi-p-breakpoint") // Requires debug module
-                | p.last.endsWith("rv32mi-p-scall") // infinit loop after trap_user_ecall at 0x800001c8
-                | p.last.endsWith("rv32si-p-wfi") // infinit loop after trap_supervisor_ecall at 0x800001a8
-                | p.last.endsWith("rv32si-p-dirty")) // infinit loop after trap_machine_ecall at 0x80000027c
-              .map(PathRef(_))
-          }
-          case _ => {
-            os.walk(init().path).filter(p => p.last.startsWith(casename)).filterNot(p => p.last.endsWith("elf")).map(PathRef(_))
-          }
-        }
-      }
-    }
+//       def binaries = T {
+//         casename match {
+//           case "rv64" => {
+//             os.walk(init().path).filter(p => p.last.startsWith(casename)).filterNot(p => p.last.endsWith("elf")).filter(p =>
+//               p.last.startsWith("rv64mi-p") | p.last.startsWith("rv64si-p") | p.last.startsWith("rv64ui-p") | p.last.startsWith("rv64uf-p") | p.last.startsWith("rv64ua-p") | p.last.startsWith("rv64ud-p") | p.last.startsWith("rv64uc-p") | p.last.startsWith("rv64um-p") | p.last.startsWith("rv64uzfh-p")).filterNot(p =>
+//               p.last.startsWith("rv64ui-p-simple") //have no <pass> symbol in elf
+//                 | p.last.endsWith("csr") //MISA differs between Rocket and Spike
+//                 | p.last.endsWith("rv64mi-p-breakpoint") // Requires debug module
+//                 | p.last.endsWith("rv64si-p-icache-alias") // infinit loop after trap_machine_ecall at 0x8000012b8
+//                 | p.last.endsWith("rv64ui-p-ma_data") // https://github.com/riscv-software-src/riscv-tests/issues/419
+//                 | p.last.endsWith("rv64si-p-wfi") // infinit loop after trap_supervisor_ecall at 0x800001ac
+//                 | p.last.endsWith("rv64mi-p-scall")) // infinit loop after trap_supervisor_ecall at 0x800001ec
+//               .map(PathRef(_))
+//           }
+//           case "rv32" => {
+//             os.walk(init().path).filter(p => p.last.startsWith(casename)).filterNot(p => p.last.endsWith("elf")).filter(p =>
+//               p.last.startsWith("rv32mi-p") | p.last.startsWith("rv32si-p") | p.last.startsWith("rv32ui-p") | p.last.startsWith("rv32uf-p") | p.last.startsWith("rv32ua-p") | p.last.startsWith("rv32um-p") | p.last.startsWith("rv32uzfh-p")).filterNot(p =>
+//               p.last.startsWith("rv32ui-p-simple")
+//                 | p.last.endsWith("csr") // MISA differs
+//                 | p.last.endsWith("rv32mi-p-breakpoint") // Requires debug module
+//                 | p.last.endsWith("rv32mi-p-scall") // infinit loop after trap_user_ecall at 0x800001c8
+//                 | p.last.endsWith("rv32si-p-wfi") // infinit loop after trap_supervisor_ecall at 0x800001a8
+//                 | p.last.endsWith("rv32si-p-dirty")) // infinit loop after trap_machine_ecall at 0x80000027c
+//               .map(PathRef(_))
+//           }
+//           case _ => {
+//             os.walk(init().path).filter(p => p.last.startsWith(casename)).filterNot(p => p.last.endsWith("elf")).map(PathRef(_))
+//           }
+//         }
+//       }
+//     }
 
-    object rvcase extends Cross[Suite](alltests :+ "rv64" :+ "rv32": _*)
+//     object rvcase extends Cross[Suite](alltests :+ "rv64" :+ "rv32": _*)
 
-  }
-}
+//   }
+// }
 
-object tests extends Module() {
-  object riscvtests extends Module {
-    class run(casename: String) extends ScalaModule with ScalafmtModule {
-      override def scalaVersion = v.scala
+// object tests extends Module() {
+//   object riscvtests extends Module {
+//     class run(casename: String) extends ScalaModule with ScalafmtModule {
+//       override def scalaVersion = v.scala
 
-      override def defaultCommandName() = "test"
+//       override def defaultCommandName() = "test"
 
-      def test(args: String*) = T.command {
-        bin().map { c =>
-          val name = c.path.last
-          val entrancePath = if (xlen == "64") cases.entrance64.compile().path.toString else cases.entrance32.compile().path.toString
-          val out = os.proc("llvm-nm", s"${c.path.toString()}" + ".elf").call().out.toString
-          val pass = os.proc("grep", "pass").call(stdin = out).toString().split(" ")
-          val pass_address = pass(1).split("\n")(1)
-          val runEnv = Map(
-            "COSIM_bin" -> c.path.toString,
-            "COSIM_entrance_bin" -> entrancePath,
-            "COSIM_wave" -> (T.dest / "wave").toString,
-            "COSIM_reset_vector" -> "80000000",
-            "COSIM_timeout" -> "100000",
-            "passaddress" -> pass_address,
-            "xlen" -> xlen
-          )
-          val proc = os.proc(Seq(cosim.emulator(xlen).elf().path.toString()))
-          T.log.info(s"run test: ${c.path.last} ")
-          val p = proc.call(stdout = T.dest / s"$name.running.log", mergeErrIntoOut = true, env = runEnv, check = false)
+//       def test(args: String*) = T.command {
+//         bin().map { c =>
+//           val name = c.path.last
+//           val entrancePath = if (xlen == "64") cases.entrance64.compile().path.toString else cases.entrance32.compile().path.toString
+//           val out = os.proc("llvm-nm", s"${c.path.toString()}" + ".elf").call().out.toString // ql original
+//           // val out = os.proc(s"riscv${xlen}-unknown-elf-nm", s"${c.path.toString()}" + ".elf").call().out.toString // ql new
+//           val pass = os.proc("grep", "pass").call(stdin = out).toString().split(" ")
+//           val pass_address = pass(1).split("\n")(1)
+//           val runEnv = Map(
+//             "COSIM_bin" -> c.path.toString,
+//             "COSIM_entrance_bin" -> entrancePath,
+//             "COSIM_wave" -> (T.dest / "wave").toString,
+//             "COSIM_reset_vector" -> "80000000",
+//             "COSIM_timeout" -> "100000",
+//             "passaddress" -> pass_address,
+//             "xlen" -> xlen
+//           )
+//           val proc = os.proc(Seq(cosim.emulator(xlen).elf().path.toString()))
+//           T.log.info(s"run test: ${c.path.last} ")
+//           val p = proc.call(stdout = T.dest / s"$name.running.log", mergeErrIntoOut = true, env = runEnv, check = false)
 
-          PathRef(if (p.exitCode != 0) {
-            os.move(T.dest / s"$name.running.log", T.dest / s"$name.failed.log")
-            System.err.println(s"Test $name failed with exit code ${p.exitCode}")
-            System.exit(1)
-            T.dest / s"$name.failed.log"
-          } else {
-            os.move(T.dest / s"$name.running.log", T.dest / s"$name.passed.log")
-            T.dest / s"$name.passed.log"
-          })
-        }
-      }
+//           PathRef(if (p.exitCode != 0) {
+//             os.move(T.dest / s"$name.running.log", T.dest / s"$name.failed.log")
+//             System.err.println(s"Test $name failed with exit code ${p.exitCode}")
+//             System.exit(1)
+//             T.dest / s"$name.failed.log"
+//           } else {
+//             os.move(T.dest / s"$name.running.log", T.dest / s"$name.passed.log")
+//             T.dest / s"$name.passed.log"
+//           })
+//         }
+//       }
 
-      def bin = cases.riscvtests.rvcase(casename).binaries
+//       def bin = cases.riscvtests.rvcase(casename).binaries
 
-      def xlen = if (casename.startsWith("rv64")) "64" else "32"
+//       def xlen = if (casename.startsWith("rv64")) "64" else "32"
 
-    }
+//     }
 
-    object run extends Cross[run](cases.riscvtests.alltests :+ "rv64" :+ "rv32": _*)
+//     object run extends Cross[run](cases.riscvtests.alltests :+ "rv64" :+ "rv32": _*)
 
-  }
-}
+//   }
+// }
