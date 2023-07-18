@@ -39,7 +39,7 @@ Here are some notes for refactoring:
 2. **Install mill 0.10.0, protobuf-compiler, antlr4, clang**
     ```shell
     sudo apt-get update
-    sudo sh -c "curl -L https://github.com/com-lihaoyi/mill/releases/download/0.10.0/0.10.0 > /usr/local/bin/mill && chmod +x /usr/local/bin/mill"
+    sh -c "curl -L https://github.com/com-lihaoyi/mill/releases/download/0.10.0/0.10.0 > ~/.local/bin/mill && chmod +x ~/.local/bin/mill"
     sudo apt-get install antlr4
     sudo apt-get protobuf-compiler
     sudo apt-get install clang
@@ -54,4 +54,4 @@ Here are some notes for refactoring:
     make bsp
     make compile
     ```
-**After make compile completes, you can find the generated System Verilog files in the `./out/cosim/mfccompile/<32/64>/compile.dest` folder.**
+After `make compile` completes, you can find the generated System Verilog files in the `./out/cosim/mfccompile/<32/64>/compile.dest` folder.
